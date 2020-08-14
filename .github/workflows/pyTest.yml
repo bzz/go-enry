@@ -7,7 +7,7 @@ jobs:
       matrix:
         go-version: [1.14.x]
         python-version: [3.8] #3.6, 3.7,
-        platform: [windows-latest] #ubuntu-latest, macos-latest,
+        platform: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.platform }}
     steps:
     - name: Install Python ${{ matrix.python-version }}
@@ -15,23 +15,36 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install Go
-      uses: actions/setup-go@v1
+      uses: actions/setup-go@v2
       with:
         go-version: ${{ matrix.go-version }}
     - name: Checkout code
       uses: actions/checkout@v2
-    - name: Install CFFI built by MinGW
-      if: runner.os == 'Windows'
-      run: |
-        bash -c "pacman --noconfirm -S mingw-w64-i686-python-cffi"
+    # - name: Install CFFI built by MinGW
+    #   if: runner.os == 'Windows'
+    #   run: |
+    #     bash -c "pacman --noconfirm -S mingw-w64-i686-python-cffi"
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -r python/requirements.txt
-        pip install -r python/requirements.dev.txt
+        python -m pip install pybindgen
+        go get golang.org/x/tools/cmd/goimports
+        go get github.com/go-python/gopy
     - name: Build and install package
       run: |
-        pip install -e python
+        gopy gen -output=out github.com/go-enry/go-enry/v2
+        cd out
+        bash -c 'head -15 enry.go'
+        make build
+        pwd; ls
+    - name: Linux hack to load dynamic library
+      if: runner.os == 'Linux'
+      run: |
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./
     - name: Test
       run: |
-        pytest python/
+        cd out
+        pwd; ls
+        file enry_go.so
+        echo "$LD_LIBRARY_PATH"
+        python -c 'import enry; enry.IsVendor("vendors/")'
+        echo $?
